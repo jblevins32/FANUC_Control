@@ -97,37 +97,21 @@ def compute_trajectory(side_length):
     trajectory = [
         [0,0,0,0,0,0],
         [20,-100,0,0,-45,0],
-        [30,-200,-100,0,-45,0],
-        [40,-300,-200,0,-45,0],
-        [50,-300,-300,0,-45,0],
-        [50,-300,-400,0,-45,0],
+        [30,-100,-50,0,-45,0],
+        [40,-150,-100,0,-45,0],
+        [40,-200,-100,0,-45,0],
+        [40,-200,-100,0,-45,0],
         ]
-    # trajectory = [
-    #     [0,0,0,0,0,0],
-    #     [20,100,0,0,-45,0],
-    #     [30,200,-100,0,-45,0],
-    #     [40,300,-200,0,-45,0],
-    #     [50,300,-300,0,-45,0],
-    #     [50,300,-400,0,-45,0],
-    #     ]
-    # Permuated
-    # trajectory = [
-    #     [0,0,0,0,0,0],
-    #     [50,0,-300,0,-45,0],
-    #     [50,-400,-300,0,-45,0],
-    #     [50,0,-300,0,-45,0],
-    #     [0,0,0,0,0,0]
-    #     ]
     return trajectory
 
 ####################################################
 
-def inverse_jacobian_control(iter,trajectory,attack):
+def inverse_jacobian_control(iter,trajectory):
     # Placeholder for inverse jacobian control logic
     # This function should determine the needed velocity for a given duration
     # based on the current robot pose and the desired target pose
 
-    current_pose = np.array(get_modified_pose(attack=attack)).flatten() # Get current joint angles (pose)
+    current_pose = np.array(get_modified_pose(altered=True)).flatten() # Get current joint angles (pose)
 
     targets = trajectory
     target_pose = targets[iter]
@@ -142,23 +126,10 @@ def inverse_jacobian_control(iter,trajectory,attack):
     error[4] = - current_pose[4] + target_pose[4]
     error[5] = - current_pose[5] + target_pose[5]
 
-
     # Calculate control
     jacobian = get_jacobian()
     inverse_jacobian = np.linalg.pinv(jacobian)
     velocity = np.matmul(inverse_jacobian, np.transpose(error))
-
-    #Test attacks here
-    # attack_matrix_permute_yz = np.array([[1,0,0,0,0,0],
-    #                           [0,0,1,0,0,0],
-    #                           [0,1,0,0,0,0],
-    #                           [0,0,0,1,0,0],
-    #                           [0,0,0,0,1,0],
-    #                           [0,0,0,0,0,1]])
-    
-    # velocity = np.dot(attack_matrix_permute_yz, velocity)
-    # print("Velocity : ", velocity)
-    # print("cmd_velocity : ", velocity)
 
     return zip(error,velocity)
 
@@ -178,9 +149,9 @@ def get_monitor_value():
     data = {"type": "get_monitor_value"}
     return send_request(data)['smsf_output']
 
-def get_modified_pose(attack):
-    data = {"type": "modified_pose","attack": attack}
-    return rdk.Mat(send_request(data)['modified_pose'])
+def get_modified_pose(altered=False):
+    data = {"type": "get_modified_pose", "altered": altered}
+    return send_request(data)['modified_pose']
 
 def detect_attack(true_values, modified_values):
     # Placeholder for attack detection logic
@@ -212,7 +183,7 @@ class ControllerApp:
         self.reset_button.grid(row=0, column=1, padx=10, pady=10)
         
         self.ping_button = tk.Button(root, text="Ping Server", command=self.ping_server_status, width=20, height=5)
-        self.ping_button.grid(row=3, column=1, columnspan=2, padx=10, pady=10)
+        self.ping_button.grid(row=1, column=0, columnspan=1, padx=10, pady=10)
         
         self.trajectory_label = tk.Label(root, text="Enter side length for trajectory:")
         self.trajectory_label.grid(row=2, column=0, columnspan=1, padx=10, pady=10)
@@ -220,30 +191,37 @@ class ControllerApp:
         self.trajectory_entry = tk.Entry(root)
         self.trajectory_entry.grid(row=2, column=1, columnspan=1, padx=10, pady=10)
         
+        self.dropdown_var = tk.StringVar()
+        self.dropdown = ttk.Combobox(root, textvariable=self.dropdown_var)
+        self.dropdown['values'] = ('reflect-y', 'reflect-z') # Attack options
+        self.dropdown.set("Choose attack type first")
+        self.dropdown.bind("<<ComboboxSelected>>", self.dropdown_changed)
+        self.dropdown.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+
         self.switch_var_det = tk.BooleanVar()
         self.switch_var_undet = tk.BooleanVar()
         self.switch_detectable = ttk.Checkbutton(root,text="Detectable Attack",variable=self.switch_var_det,command=self.apply_detectable_attack,onvalue=True,offvalue=False)
-        self.switch_detectable.grid(row=1, column=1, columnspan=1, padx=10, pady=10)
+        self.switch_detectable.grid(row=4, column=1, columnspan=1, padx=10, pady=10)
         self.switch_undetectable = ttk.Checkbutton(root,text="Undetectable Attack",variable=self.switch_var_undet,command=self.apply_undetectable_attack,onvalue=True,offvalue=False)
-        self.switch_undetectable.grid(row=1, column=2, columnspan=1, padx=10, pady=10)
+        self.switch_undetectable.grid(row=4, column=2, columnspan=1, padx=10, pady=10)
 
         self.compute_button = tk.Button(root, text="Compute Trajectory", command=self.compute_trajectory_button)
-        self.compute_button.grid(row=2, column=2, columnspan=1, padx=10, pady=10)
+        self.compute_button.grid(row=5, column=0, columnspan=1, padx=10, pady=10)
         
         self.jacobian_button = tk.Button(root, text="Print Jacobian", command=self.print_jacobian)
-        self.jacobian_button.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+        self.jacobian_button.grid(row=5, column=1, columnspan=2, padx=10, pady=10)
         
         self.status_label = tk.Label(root, text="Status: Stopped")
-        self.status_label.grid(row=4, column=0, columnspan=1, padx=10, pady=10)
+        self.status_label.grid(row=6, column=0, columnspan=1, padx=10, pady=10)
         
         self.connection_label = tk.Label(root, text="Connection: Not Connected")
-        self.connection_label.grid(row=4, column=1, columnspan=1, padx=10, pady=10)
-        
+        self.connection_label.grid(row=6, column=1, columnspan=1, padx=10, pady=10)
+
         # Create a matplotlib figure for real-time plotting
-        self.fig = Figure(figsize=(13, 8), dpi=100)
+        self.fig = Figure(figsize=(10, 8), dpi=100)
         # self.ax = self.fig.add_subplot(221)
         self.canvas = FigureCanvasTkAgg(self.fig, master=root)
-        self.canvas.get_tk_widget().grid(row=0, column=3, rowspan = 4,columnspan=1, padx=10, pady=10)
+        self.canvas.get_tk_widget().grid(row=0, column=5, rowspan = 4,columnspan=1, padx=10, pady=10)
 
         # self.ax.set_title("Real-Time Velocity Plot")
         # self.ax.set_xlabel("Time Step")
@@ -279,9 +257,6 @@ class ControllerApp:
         self.thread = None
 
         self.check_connection()
-        self.attack = None
-        self.undetectable_attack = None
-    
 
     def plot_trajectory_3d(self, trajectory):
         self.ax3.clear()
@@ -296,25 +271,31 @@ class ControllerApp:
         self.ax3.legend()
         self.canvas.draw()
 
+    def dropdown_changed(self, event):
+        selected = self.dropdown_var.get()
+        print(f"Dropdown changed to: {selected}")
+        send_request({"type": "attack_type", "attack": selected})
+        # You can call other functions or update state based on this
+
     def apply_detectable_attack(self):
         if self.switch_var_det.get():
             print("Applying detectable attack")
             # Apply the attack
-            self.attack = 'reflect-y'
+            send_request({"type": "attack_det"})
         else:
             print("Removing detectable attack")
             # Remove the attack
-            self.attack = None
+            send_request({"type": "attack_det"})
 
     def apply_undetectable_attack(self):
         if self.switch_var_undet.get():
             print("Applying undetectable attack")
             # Apply the attack
-            self.undetectable_attack = 'reflect-y'
+            send_request({"type": "attack_undet"})
         else:
             print("Removing undetectable attack")
             # Remove the attack
-            self.undetectable_attack = None
+            send_request({"type": "attack_undet"})
 
     def check_connection(self):
         if ping_server():
@@ -432,7 +413,7 @@ class ControllerApp:
         while self.running:
 
             # Read output of controller which is error and velocity
-            controller_out = inverse_jacobian_control(iter,_traj, self.attack)
+            controller_out = inverse_jacobian_control(iter,_traj)
             unzip = list(zip(*controller_out))
             velocity = np.array(unzip[1])
             error = np.array(unzip[0])
@@ -445,10 +426,10 @@ class ControllerApp:
             error_list = list(zip(*errors))
             
             # Send velocity command to the robot
-            send_request({"type": "move", "velocity": velocity.tolist(), "attack": self.attack})
+            send_request({"type": "move", "velocity": velocity.tolist()})
 
             # Get the states. This is the main observation.
-            pose = send_request({"type": "modified_pose","attack": self.undetectable_attack})['modified_pose']
+            pose = get_modified_pose()
             print(f'Observed pose {np.round(pose,2)}')
             obs_traj.append(pose[0:3])
             obs_traj_list = list(zip(*obs_traj))
