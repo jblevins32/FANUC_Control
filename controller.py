@@ -193,7 +193,7 @@ class ControllerApp:
         
         self.dropdown_var = tk.StringVar()
         self.dropdown = ttk.Combobox(root, textvariable=self.dropdown_var)
-        self.dropdown['values'] = ('reflect-y', 'reflect-z') # Attack options
+        self.dropdown['values'] = ('reflect-y', 'reflect-x', 'reflect-z') # Attack options
         self.dropdown.set("Choose attack type first")
         self.dropdown.bind("<<ComboboxSelected>>", self.dropdown_changed)
         self.dropdown.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
@@ -234,12 +234,9 @@ class ControllerApp:
         
         self.trajectory = np.array(compute_trajectory(_side_length))
 
-        self.min_x = np.min(self.trajectory[:,0])
-        self.max_x = np.max(self.trajectory[:,0])
-        self.min_y = np.min(self.trajectory[:,1])
-        self.max_y = np.max(self.trajectory[:,1])
-        self.min_z = np.min(self.trajectory[:,2])
-        self.max_z = np.max(self.trajectory[:,2])
+        self.max_x = np.max(abs(self.trajectory[:,0]))
+        self.max_y = np.max(abs(self.trajectory[:,1]))
+        self.max_z = np.max(abs(self.trajectory[:,2]))
 
         self.ax2 = self.fig.add_subplot(111, projection='3d')  # 2 rows, 1 column, position 3
         self.ax2.plot3D(self.trajectory[:,0],self.trajectory[:,1],self.trajectory[:,2], c='blue', label="Desired Trajectory",linewidth=5)
@@ -249,9 +246,9 @@ class ControllerApp:
         self.ax2.set_xlabel("X")
         self.ax2.set_ylabel("Y")
         self.ax2.set_zlabel("Z")
-        self.ax2.set_xlim(self.min_x, self.max_x)
-        self.ax2.set_ylim(self.min_y, -self.min_y)
-        self.ax2.set_zlim(self.min_z, self.max_z)
+        self.ax2.set_xlim(-self.max_x, self.max_x)
+        self.ax2.set_ylim(-self.max_y, self.max_y)
+        self.ax2.set_zlim(-self.max_z, self.max_z)
         self.ax2.legend()
         self.running = False
         self.thread = None
@@ -375,9 +372,9 @@ class ControllerApp:
         self.ax2.scatter3D(self.trajectory[0,0],self.trajectory[0,1],self.trajectory[0,2], c='Green', label="Start", s=150)
         self.ax2.scatter3D(self.trajectory[-1,0],self.trajectory[-1,1],self.trajectory[-1,2], c='Red', label="End", s=150)
         self.ax2.scatter3D(plot_data[12][-1],plot_data[13][-1],plot_data[14][-1], c='Cyan', label="Current TCP", s=100)
-        self.ax2.set_xlim(self.min_x, self.max_x)
-        self.ax2.set_ylim(self.min_y, -self.min_y)
-        self.ax2.set_zlim(self.min_z, self.max_z)
+        self.ax2.set_xlim(-self.max_x, self.max_x)
+        self.ax2.set_ylim(-self.max_y, self.max_y)
+        self.ax2.set_zlim(-self.max_z, self.max_z)
 
         self.ax2.legend(loc='upper right', bbox_to_anchor=(1.2, 1.1))
 
