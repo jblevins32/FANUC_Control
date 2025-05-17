@@ -10,6 +10,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 _side_length = 200  # Default side length for the square trajectory
 _subdivision = 30
@@ -94,19 +95,22 @@ def compute_trajectory(side_length):
     # Home pose is (x:550, y:-1000, z:475, xrot:0, yrot:-90, zrot:-180). Trajectories are changes from to this pose.
     trajectory = [
         [0,0,0,0,0,0],
-        [50,-300,0,0,-45,0],
+        [20,-100,0,0,-45,0],
+        [30,-200,-100,0,-45,0],
+        [40,-300,-200,0,-45,0],
+        [50,-300,-300,0,-45,0],
         [50,-300,-400,0,-45,0],
-        [50,-300,0,0,-45,0],
-        [0,0,0,0,0,0]
+        [50,-300,-400,0,-45,0],
+        [50,-300,-400,0,-45,0],
         ]
     # Permuated
-    trajectory = [
-        [0,0,0,0,0,0],
-        [50,0,-300,0,-45,0],
-        [50,-400,-300,0,-45,0],
-        [50,0,-300,0,-45,0],
-        [0,0,0,0,0,0]
-        ]
+    # trajectory = [
+    #     [0,0,0,0,0,0],
+    #     [50,0,-300,0,-45,0],
+    #     [50,-400,-300,0,-45,0],
+    #     [50,0,-300,0,-45,0],
+    #     [0,0,0,0,0,0]
+    #     ]
     return trajectory
 
 ####################################################
@@ -115,11 +119,12 @@ def inverse_jacobian_control(iter,trajectory):
     # Placeholder for inverse jacobian control logic
     # This function should determine the needed velocity for a given duration
     # based on the current robot pose and the desired target pose
+
     current_pose = np.array(get_modified_pose()).flatten() # Get current joint angles (pose)
 
     targets = trajectory
     target_pose = targets[iter]
-    print(f"Going to {target_pose}")
+    print(f"Desired pose {target_pose}")
 
     # error[0] = (target_pose[0] - current_pose[0])+550
     # error[1] = - current_pose[1] + target_pose[1]
@@ -138,11 +143,11 @@ def inverse_jacobian_control(iter,trajectory):
     # Calcualte errors for Jacobian control
     error = np.zeros(6)
     error[0] = ( - current_pose[0]) + target_pose[0]
-    error[1] = -1000 - current_pose[1] + target_pose[1]
+    error[1] = - current_pose[1] + target_pose[1]
     error[2] = ( - current_pose[2]) + target_pose[2]
     error[3] = - current_pose[3] + target_pose[3]
-    error[4] = -90 - current_pose[4] + target_pose[4]
-    error[5] = -180 - current_pose[5] + target_pose[5]
+    error[4] = - current_pose[4] + target_pose[4]
+    error[5] = - current_pose[5] + target_pose[5]
     # print("current_pose : ", current_pose)
     # print("target_pose : ", target_pose)
     # print("Error : ", error)
@@ -166,7 +171,7 @@ def inverse_jacobian_control(iter,trajectory):
 
     return zip(error,velocity)
 
-def send_request_to_attacker(data):
+def send_request(data):
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(('127.0.0.1', 5000))
     client.send(json.dumps(data).encode())
@@ -174,17 +179,17 @@ def send_request_to_attacker(data):
     client.close()
     return json.loads(response)
 
-def send_velocity_to_attacker(velocity):
-    data = {"type": "attack_move", "velocity": velocity}
-    return send_request_to_attacker(data)
+def send_velocity(velocity):
+    data = {"type": "move", "velocity": velocity}
+    return send_request(data)
 
 def get_monitor_value():
     data = {"type": "get_monitor_value"}
-    return send_request_to_attacker(data)['smsf_output']
+    return send_request(data)['smsf_output']
 
 def get_modified_pose():
     data = {"type": "modified_pose"}
-    return rdk.Mat(send_request_to_attacker(data)['modified_pose'])
+    return rdk.Mat(send_request(data)['modified_pose'])
 
 def detect_attack(true_values, modified_values):
     # Placeholder for attack detection logic
@@ -193,14 +198,14 @@ def detect_attack(true_values, modified_values):
 def ping_server():
     try:
         data = {"type": "ping"}
-        response = send_request_to_attacker(data)
+        response = send_request(data)
         return response.get("status") == "success"
     except Exception as e:
         return False
 
 def get_jacobian():
     data = {"type": "get_jacobian"}
-    response = send_request_to_attacker(data)
+    response = send_request(data)
     return response['jacobian']
 
 class ControllerApp:
@@ -209,13 +214,13 @@ class ControllerApp:
         self.root.title("Robot Controller")
         self.error_data = [[], [], []]
         
-        self.start_button = tk.Button(root, text="Start", command=self.start_controller)
+        self.start_button = tk.Button(root, text="Start", command=self.start_controller, width=10, height=5)
         self.start_button.grid(row=0, column=0, padx=10, pady=10)
         
-        self.stop_button = tk.Button(root, text="Stop", command=self.stop_controller)
-        self.stop_button.grid(row=0, column=1, padx=10, pady=10)
+        self.reset_button = tk.Button(root, text="reset", command=self.stop_controller, width=10, height=5)
+        self.reset_button.grid(row=0, column=1, padx=10, pady=10)
         
-        self.ping_button = tk.Button(root, text="Ping Server", command=self.ping_server_status)
+        self.ping_button = tk.Button(root, text="Ping Server", command=self.ping_server_status, width=20, height=5)
         self.ping_button.grid(row=1, column=0, columnspan=2, padx=10, pady=10)
         
         self.trajectory_label = tk.Label(root, text="Enter side length for trajectory:")
@@ -236,32 +241,42 @@ class ControllerApp:
         self.connection_label = tk.Label(root, text="Connection: Not Connected")
         self.connection_label.grid(row=4, column=1, columnspan=1, padx=10, pady=10)
         
-
-                # Create a matplotlib figure for real-time plotting
+        # Create a matplotlib figure for real-time plotting
         self.fig = Figure(figsize=(13, 8), dpi=100)
-        self.ax = self.fig.add_subplot(221)
+        # self.ax = self.fig.add_subplot(221)
         self.canvas = FigureCanvasTkAgg(self.fig, master=root)
         self.canvas.get_tk_widget().grid(row=0, column=3, rowspan = 4,columnspan=1, padx=10, pady=10)
 
-        self.ax.set_title("Real-Time Velocity Plot")
-        self.ax.set_xlabel("Time Step")
-        self.ax.set_ylabel("Velocity")
+        # self.ax.set_title("Real-Time Velocity Plot")
+        # self.ax.set_xlabel("Time Step")
+        # self.ax.set_ylabel("Velocity")
 
-        self.ax1 = self.fig.add_subplot(222)  # 2 rows, 1 column, position 2
-        self.ax1.set_title("Real-Time Error Plot")
-        self.ax1.set_xlabel("Time Step")
-        self.ax1.set_ylabel("Error")
+        # self.ax1 = self.fig.add_subplot(222)  # 2 rows, 1 column, position 2
+        # self.ax1.set_title("Real-Time Error Plot")
+        # self.ax1.set_xlabel("Time Step")
+        # self.ax1.set_ylabel("Error")
         
-        trajectory = np.array(compute_trajectory(_side_length))
+        self.trajectory = np.array(compute_trajectory(_side_length))
 
-        # if trajectory.shape[1] == 2:  # If the trajectory is 2D
-        #     trajectory = np.hstack((trajectory, np.zeros((trajectory.shape[0], 1))))
+        self.min_x = np.min(self.trajectory[:,0])
+        self.max_x = np.max(self.trajectory[:,0])
+        self.min_y = np.min(self.trajectory[:,1])
+        self.max_y = np.max(self.trajectory[:,1])
+        self.min_z = np.min(self.trajectory[:,2])
+        self.max_z = np.max(self.trajectory[:,2])
 
-        self.ax2 = self.fig.add_subplot(223)  # 2 rows, 1 column, position 2
-        self.ax2.scatter(trajectory[:, 2], trajectory[:, 3], c='blue', label="Trajectory Points")
-        self.ax2.set_title("Trajectory Plot")
+        self.ax2 = self.fig.add_subplot(111, projection='3d')  # 2 rows, 1 column, position 3
+        self.ax2.plot3D(self.trajectory[:,0],self.trajectory[:,1],self.trajectory[:,2], c='blue', label="Desired Trajectory",linewidth=5)
+        self.ax2.scatter3D(self.trajectory[0,0],self.trajectory[0,1],self.trajectory[0,2], c='Green', label="Start", s=150)
+        self.ax2.scatter3D(self.trajectory[-1,0],self.trajectory[-1,1],self.trajectory[-1,2], c='Red', label="End", s=150)
+        self.ax2.set_title("Manipulator Trajectory")
         self.ax2.set_xlabel("X")
         self.ax2.set_ylabel("Y")
+        self.ax2.set_zlabel("Z")
+        self.ax2.set_xlim(self.min_x, self.max_x)
+        self.ax2.set_ylim(self.min_y, self.max_y)
+        self.ax2.set_zlim(self.min_z, self.max_z)
+        self.ax2.legend()
         self.running = False
         self.thread = None
 
@@ -269,16 +284,16 @@ class ControllerApp:
     
 
     def plot_trajectory_3d(self, trajectory):
-        self.ax2.clear()
+        self.ax3.clear()
         trajectory = np.array(trajectory)
-        # if trajectory.shape[1] == 2:
-        #     trajectory = np.hstack((trajectory, np.zeros((trajectory.shape[0], 1))))
-        self.ax2.scatter(trajectory[:, 0], trajectory[:, 1], c='blue', label="Trajectory Points")
-        self.ax2.set_title("3D Trajectory")
-        self.ax2.set_xlabel("X")
-        self.ax2.set_ylabel("Y")
-        # self.ax2.set_zlabel("Z")
-        self.ax2.legend()
+        self.ax3.plot3D(trajectory[:,0],trajectory[:,1],trajectory[:,2], c='blue', label="Actual Trajectory")
+        self.ax3.scatter3D(trajectory[0,0],trajectory[0,1],trajectory[0,2], c='Green', label="Start", s=50)
+        self.ax3.scatter3D(trajectory[-1,0],trajectory[-1,1],trajectory[-1,2], c='Red', label="End")
+        self.ax3.set_title("Observed Trajectory")
+        self.ax3.set_xlabel("X")
+        self.ax3.set_ylabel("Y")
+        self.ax3.set_zlabel("Z")
+        self.ax3.legend()
         self.canvas.draw()
 
     def check_connection(self):
@@ -320,34 +335,51 @@ class ControllerApp:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to get Jacobian: {e}")
 
-    def update_plot(self, _error_data,_iter):
-        self.ax.clear()
+    def update_plot(self, plot_data,_iter):
+        # self.ax.clear()
 
-        self.ax.set_title("Real-Time Velocity Plot")
-        self.ax.set_xlabel("Time Step")
-        self.ax.set_ylabel("Velocity")
+        # self.ax.set_title("Real-Time Velocity Plot")
+        # self.ax.set_xlabel("Time Step")
+        # self.ax.set_ylabel("Velocity")
 
-        self.ax.plot(_error_data[0], label="Joint 1")
-        self.ax.plot(_error_data[1], label="Joint 2")
-        self.ax.plot(_error_data[2], label="Joint 3")
-        self.ax.plot(_error_data[3], label="Joint 4")
-        self.ax.plot(_error_data[4], label="Joint 5")
-        self.ax.plot(_error_data[5], label="Joint 6")
-        self.ax.legend()
+        # self.ax.plot(plot_data[0], label="Joint 1")
+        # self.ax.plot(plot_data[1], label="Joint 2")
+        # self.ax.plot(plot_data[2], label="Joint 3")
+        # self.ax.plot(plot_data[3], label="Joint 4")
+        # self.ax.plot(plot_data[4], label="Joint 5")
+        # self.ax.plot(plot_data[5], label="Joint 6")
+        # self.ax.legend()
 
-        self.ax1.clear()
+        # self.ax1.clear()
 
-        self.ax1.set_title("Real-Time Error Plot")
-        self.ax1.set_xlabel("Time Step")
-        self.ax1.set_ylabel("Error")
+        # self.ax1.set_title("Real-Time Error Plot")
+        # self.ax1.set_xlabel("Time Step")
+        # self.ax1.set_ylabel("Error")
 
-        self.ax1.plot(_error_data[6], label="Error X")
-        self.ax1.plot(_error_data[7],label="Error Y")
-        self.ax1.plot(_error_data[8],label="Error Z")
-        # self.ax1.plot(_error_data[9],label="Error W")
-        # self.ax1.plot(_error_data[10],label="Error P")
-        # self.ax1.plot(_error_data[11],label="Error R")
-        self.ax1.legend()
+        # self.ax1.plot(plot_data[6], label="Error X")
+        # self.ax1.plot(plot_data[7],label="Error Y")
+        # self.ax1.plot(plot_data[8],label="Error Z")
+        # # self.ax1.plot(plot_data[9],label="Error W")
+        # # self.ax1.plot(plot_data[10],label="Error P")
+        # # self.ax1.plot(plot_data[11],label="Error R")
+        # self.ax1.legend()
+
+        self.ax2.clear()
+        self.ax2.set_title("Manipulator Trajectory")
+        self.ax2.set_xlabel("X")
+        self.ax2.set_ylabel("Y")
+        self.ax2.set_zlabel("Z")
+        self.ax2.plot3D(self.trajectory[:,0],self.trajectory[:,1],self.trajectory[:,2], c='blue', label="Desired Trajectory",linewidth=5)
+        self.ax2.plot3D(plot_data[12],plot_data[13],plot_data[14], c='Cyan', label="Observed Trajectory",linewidth=3)
+        self.ax2.scatter3D(self.trajectory[0,0],self.trajectory[0,1],self.trajectory[0,2], c='Green', label="Start", s=150)
+        self.ax2.scatter3D(self.trajectory[-1,0],self.trajectory[-1,1],self.trajectory[-1,2], c='Red', label="End", s=150)
+        self.ax2.scatter3D(plot_data[12][-1],plot_data[13][-1],plot_data[14][-1], c='Cyan', label="Current TCP", s=100)
+        self.ax2.set_xlim(self.min_x, self.max_x)
+        self.ax2.set_ylim(self.min_y, self.max_y)
+        self.ax2.set_zlim(self.min_z, self.max_z)
+
+        self.ax2.legend(loc='upper right', bbox_to_anchor=(1.2, 1.1))
+
         self.canvas.draw()
 
     def start_controller(self):
@@ -358,12 +390,11 @@ class ControllerApp:
             self.thread.start()
 
     def stop_controller(self):
-        if self.running:
-            self.running = False
-            send_request_to_attacker({"type": "reset"})
-            self.status_label.config(text="Status: Stopped")
-            if self.thread:
-                self.thread.join()
+        self.running = False
+        send_request({"type": "reset"})
+        self.status_label.config(text="Status: Stopped")
+        if self.thread:
+            self.thread.join()
 
     def controller_loop(self):
 
@@ -373,8 +404,14 @@ class ControllerApp:
         length = len(_traj)
         velocities=[]
         errors = []
+        obs_traj = []
+
+        # Reset the robot to home position
+        send_request({"type": "reset"})
+
         while self.running:
 
+            # Read output of controller which is error and velocity
             controller_out = inverse_jacobian_control(iter,_traj)
             unzip = list(zip(*controller_out))
             velocity = np.array(unzip[1])
@@ -386,15 +423,25 @@ class ControllerApp:
                 error_list = []
             joint_vel_list = list(zip(*velocities))  # Convert to list for safe indexing
             error_list = list(zip(*errors))
-            plot_list = joint_vel_list + error_list 
-            self.update_plot(plot_list, iter)
             
-            send_request_to_attacker({"type": "attack_move", "velocity": velocity.tolist()})
+            # Send velocity command to the robot
+            send_request({"type": "move", "velocity": velocity.tolist()})
+
+            # Get the states. This is the main observation.
+            pose = send_request({"type": "modified_pose"})['modified_pose']
+            print(f'Observed pose {np.round(pose,2)}')
+            obs_traj.append(pose[0:3])
+            obs_traj_list = list(zip(*obs_traj))
+
+            # Update plots
+            plot_list = joint_vel_list + error_list + obs_traj_list
+            self.update_plot(plot_list, iter)
+
             iter += 1
 
             # If the trajectory is completed, reset the robot
             if iter == length:
-                send_request_to_attacker({"type": "reset"})
+                # send_request({"type": "reset"})
                 self.running = False
             
             # time.sleep(0.01)
