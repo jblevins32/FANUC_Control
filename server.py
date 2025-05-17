@@ -10,13 +10,14 @@ def robotIK(robot, pose):
 
     return ikSol
 
-def get_joints_from_control(velocity):
-    ''' Get joint angles from velocity which we will move to '''
-
-    velocity = np.array(velocity)
+def get_joints_from_control(velocity, attack):
+    ''' Get joint angle targets from velocity command which we will move to (this is the plant doing the control action)'''
 
     timestep = 1
     jacb = get_jacobian(robot, robot.Joints())
+
+    # y reflection attack
+    velocity = attack_control(velocity, jacb, attack)
 
     target_dot = np.matmul(jacb,velocity)
     target = target_dot.__mul__(timestep)
@@ -38,12 +39,16 @@ def get_joints_from_control(velocity):
     return target_mod
 
 
-def get_modified_pose():
+def get_modified_pose(attack):
     ''' Get pose of robot with respect to starting position '''
     orig_pose = rdk.Pose_2_Fanuc(robot.Pose())
     mod_pose = orig_pose
     mod_pose[0], mod_pose[2], mod_pose[4], mod_pose[5] = orig_pose[0]-550, orig_pose[2]-475, orig_pose[4]+90, orig_pose[5]+180
     
+    # y reflection attack
+
+    mod_pose = attack_obs(mod_pose, attack)
+
     return mod_pose
 
 def get_pose_from_api():
@@ -68,6 +73,30 @@ def get_jacobian(robot, joint_angles):
     
     return J
 
+def attack_control(control, jacb, attack):
+    if attack == None:
+        return control
+    elif attack == 'reflect-y':
+        # 6x6 reflection matrix across y axis
+        reflection = np.linalg.inv(jacb) @ np.array([
+                            [1, 0, 0, 0, 0, 0],
+                            [0, -1, 0, 0, 0, 0],
+                            [0, 0, 1, 0, 0, 0],
+                            [0, 0, 0, 1, 0, 0],
+                            [0, 0, 0, 0, 1, 0],
+                            [0, 0, 0, 0, 0, 1]]) @ jacb
+        control = np.dot(reflection,np.array(control))
+    return control
+
+def attack_obs(pose, attack):
+    # Adjust observable for specific attacks
+    if attack == None:
+        return pose
+    elif attack == 'reflect-y':
+        pose[1] = -pose[1]
+    
+    return pose
+
 def handle_client_connection(client_socket):
     ''' Handle client requests '''
 
@@ -79,14 +108,14 @@ def handle_client_connection(client_socket):
         ''' Move robot to a specific pose '''
         # Attacker should attack control here!
         velocity = data['velocity']
-        target_joints = get_joints_from_control(velocity)
+        target_joints = get_joints_from_control(velocity, data['attack'])
         robot.MoveJ(target_joints,blocking=True)
         response = {"status": "success"}
 
     elif data['type'] == 'modified_pose':
         ''' Get pose of robot with respect to starting position '''
         pose = get_pose_from_api()
-        modified_pose = get_modified_pose()
+        modified_pose = get_modified_pose(attack=data['attack'])
         response = {"modified_pose": modified_pose}
 
     elif data['type'] == 'get_monitor_value':

@@ -3,6 +3,7 @@ import socket
 import json
 import threading
 import tkinter as tk
+from tkinter import ttk
 from tkinter import messagebox
 import robodk as rdk
 import numpy as np
@@ -92,7 +93,7 @@ def compute_trajectory(side_length):
 
     # print(len(trajectory))
 
-    # Home pose is (x:550, y:-1000, z:475, xrot:0, yrot:-90, zrot:-180). Trajectories are changes from to this pose.
+    # Home pose is (x:550, y:0, z:475, xrot:0, yrot:-90, zrot:-180). Trajectories are changes from to this pose.
     trajectory = [
         [0,0,0,0,0,0],
         [20,-100,0,0,-45,0],
@@ -100,9 +101,15 @@ def compute_trajectory(side_length):
         [40,-300,-200,0,-45,0],
         [50,-300,-300,0,-45,0],
         [50,-300,-400,0,-45,0],
-        [50,-300,-400,0,-45,0],
-        [50,-300,-400,0,-45,0],
         ]
+    # trajectory = [
+    #     [0,0,0,0,0,0],
+    #     [20,100,0,0,-45,0],
+    #     [30,200,-100,0,-45,0],
+    #     [40,300,-200,0,-45,0],
+    #     [50,300,-300,0,-45,0],
+    #     [50,300,-400,0,-45,0],
+    #     ]
     # Permuated
     # trajectory = [
     #     [0,0,0,0,0,0],
@@ -115,42 +122,26 @@ def compute_trajectory(side_length):
 
 ####################################################
 
-def inverse_jacobian_control(iter,trajectory):
+def inverse_jacobian_control(iter,trajectory,attack):
     # Placeholder for inverse jacobian control logic
     # This function should determine the needed velocity for a given duration
     # based on the current robot pose and the desired target pose
 
-    current_pose = np.array(get_modified_pose()).flatten() # Get current joint angles (pose)
+    current_pose = np.array(get_modified_pose(attack=attack)).flatten() # Get current joint angles (pose)
 
     targets = trajectory
     target_pose = targets[iter]
     print(f"Desired pose {target_pose}")
 
-    # error[0] = (target_pose[0] - current_pose[0])+550
-    # error[1] = - current_pose[1] + target_pose[1]
-    # error[2] = ( - current_pose[2])+475
-    # error[3] = - current_pose[3]
-    # error[4] = -90 -current_pose[4]
-    # error[5] = -180 - current_pose[5]
-
-    # error[0] = (target_pose[0] - current_pose[0])
-    # error[1] = - current_pose[1] 
-    # error[2] = ( - current_pose[2])+ target_pose[1]
-    # error[3] = - current_pose[3]
-    # error[4] = -90 -current_pose[4]
-    # error[5] = -180 - current_pose[5]
-
     # Calcualte errors for Jacobian control
     error = np.zeros(6)
-    error[0] = ( - current_pose[0]) + target_pose[0]
+    error[0] = - current_pose[0] + target_pose[0]
     error[1] = - current_pose[1] + target_pose[1]
-    error[2] = ( - current_pose[2]) + target_pose[2]
+    error[2] = - current_pose[2] + target_pose[2]
     error[3] = - current_pose[3] + target_pose[3]
     error[4] = - current_pose[4] + target_pose[4]
     error[5] = - current_pose[5] + target_pose[5]
-    # print("current_pose : ", current_pose)
-    # print("target_pose : ", target_pose)
-    # print("Error : ", error)
+
 
     # Calculate control
     jacobian = get_jacobian()
@@ -187,8 +178,8 @@ def get_monitor_value():
     data = {"type": "get_monitor_value"}
     return send_request(data)['smsf_output']
 
-def get_modified_pose():
-    data = {"type": "modified_pose"}
+def get_modified_pose(attack):
+    data = {"type": "modified_pose","attack": attack}
     return rdk.Mat(send_request(data)['modified_pose'])
 
 def detect_attack(true_values, modified_values):
@@ -221,7 +212,7 @@ class ControllerApp:
         self.reset_button.grid(row=0, column=1, padx=10, pady=10)
         
         self.ping_button = tk.Button(root, text="Ping Server", command=self.ping_server_status, width=20, height=5)
-        self.ping_button.grid(row=1, column=0, columnspan=2, padx=10, pady=10)
+        self.ping_button.grid(row=3, column=1, columnspan=2, padx=10, pady=10)
         
         self.trajectory_label = tk.Label(root, text="Enter side length for trajectory:")
         self.trajectory_label.grid(row=2, column=0, columnspan=1, padx=10, pady=10)
@@ -229,6 +220,13 @@ class ControllerApp:
         self.trajectory_entry = tk.Entry(root)
         self.trajectory_entry.grid(row=2, column=1, columnspan=1, padx=10, pady=10)
         
+        self.switch_var_det = tk.BooleanVar()
+        self.switch_var_undet = tk.BooleanVar()
+        self.switch_detectable = ttk.Checkbutton(root,text="Detectable Attack",variable=self.switch_var_det,command=self.apply_detectable_attack,onvalue=True,offvalue=False)
+        self.switch_detectable.grid(row=1, column=1, columnspan=1, padx=10, pady=10)
+        self.switch_undetectable = ttk.Checkbutton(root,text="Undetectable Attack",variable=self.switch_var_undet,command=self.apply_undetectable_attack,onvalue=True,offvalue=False)
+        self.switch_undetectable.grid(row=1, column=2, columnspan=1, padx=10, pady=10)
+
         self.compute_button = tk.Button(root, text="Compute Trajectory", command=self.compute_trajectory_button)
         self.compute_button.grid(row=2, column=2, columnspan=1, padx=10, pady=10)
         
@@ -274,13 +272,15 @@ class ControllerApp:
         self.ax2.set_ylabel("Y")
         self.ax2.set_zlabel("Z")
         self.ax2.set_xlim(self.min_x, self.max_x)
-        self.ax2.set_ylim(self.min_y, self.max_y)
+        self.ax2.set_ylim(self.min_y, -self.min_y)
         self.ax2.set_zlim(self.min_z, self.max_z)
         self.ax2.legend()
         self.running = False
         self.thread = None
 
         self.check_connection()
+        self.attack = None
+        self.undetectable_attack = None
     
 
     def plot_trajectory_3d(self, trajectory):
@@ -295,6 +295,26 @@ class ControllerApp:
         self.ax3.set_zlabel("Z")
         self.ax3.legend()
         self.canvas.draw()
+
+    def apply_detectable_attack(self):
+        if self.switch_var_det.get():
+            print("Applying detectable attack")
+            # Apply the attack
+            self.attack = 'reflect-y'
+        else:
+            print("Removing detectable attack")
+            # Remove the attack
+            self.attack = None
+
+    def apply_undetectable_attack(self):
+        if self.switch_var_undet.get():
+            print("Applying undetectable attack")
+            # Apply the attack
+            self.undetectable_attack = 'reflect-y'
+        else:
+            print("Removing undetectable attack")
+            # Remove the attack
+            self.undetectable_attack = None
 
     def check_connection(self):
         if ping_server():
@@ -375,7 +395,7 @@ class ControllerApp:
         self.ax2.scatter3D(self.trajectory[-1,0],self.trajectory[-1,1],self.trajectory[-1,2], c='Red', label="End", s=150)
         self.ax2.scatter3D(plot_data[12][-1],plot_data[13][-1],plot_data[14][-1], c='Cyan', label="Current TCP", s=100)
         self.ax2.set_xlim(self.min_x, self.max_x)
-        self.ax2.set_ylim(self.min_y, self.max_y)
+        self.ax2.set_ylim(self.min_y, -self.min_y)
         self.ax2.set_zlim(self.min_z, self.max_z)
 
         self.ax2.legend(loc='upper right', bbox_to_anchor=(1.2, 1.1))
@@ -412,7 +432,7 @@ class ControllerApp:
         while self.running:
 
             # Read output of controller which is error and velocity
-            controller_out = inverse_jacobian_control(iter,_traj)
+            controller_out = inverse_jacobian_control(iter,_traj, self.attack)
             unzip = list(zip(*controller_out))
             velocity = np.array(unzip[1])
             error = np.array(unzip[0])
@@ -425,10 +445,10 @@ class ControllerApp:
             error_list = list(zip(*errors))
             
             # Send velocity command to the robot
-            send_request({"type": "move", "velocity": velocity.tolist()})
+            send_request({"type": "move", "velocity": velocity.tolist(), "attack": self.attack})
 
             # Get the states. This is the main observation.
-            pose = send_request({"type": "modified_pose"})['modified_pose']
+            pose = send_request({"type": "modified_pose","attack": self.undetectable_attack})['modified_pose']
             print(f'Observed pose {np.round(pose,2)}')
             obs_traj.append(pose[0:3])
             obs_traj_list = list(zip(*obs_traj))
