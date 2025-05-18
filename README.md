@@ -7,13 +7,15 @@
 6. Press start on GUI
 
 ## Applying attacks
-7. In GUI, select `detectable attack` to apply a reflection across the xz plane (flip y)
-8. In GUI, also select `undetectable attack` to make the attack undetectable as visualized in the GUI. 
+7. In GUI, select from the dropdown the type of attack to apply
+7. In GUI, select `detectable attack` to apply a detectable attack 
+8. In GUI, also select `undetectable attack` to make the attack undetectable as visualized in the GUI (must also have `detectable attack` selected).
 
 ## To debug
 1. Debug server.py with breakpoint
 2. Run `python3 controller.py`
 3. Press start on GUI
+- Same process but vice versa for controller.py
 
 ## How it works
 - `server.py` is a server awaiting client request from `controller.py`
