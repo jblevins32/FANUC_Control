@@ -133,7 +133,7 @@ if __name__ == '__main__':
 
     # Connect to RoboDK
     RDK.Connect()
-    # RDK.setRunMode(6) # Uncomment for running physical robot
+    RDK.setRunMode(6) # Uncomment for running physical robot
 
     # Set robot parameters
     robot = RDK.Item('', 2)
